@@ -4,11 +4,16 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "start": "bun run index.ts"
+    "start": "bun run index.ts",
+    "lint": "gts lint",
+    "fix": "gts fix"
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "typedoc": "^0.28.19"
+    "gts": "^7.0.0",
+    "typedoc": "^0.28.19",
+    "typescript": "^5.6.3",
+    "@types/node": "^22.7.5"
   },
   "peerDependencies": {
     "typescript": "^5"

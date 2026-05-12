@@ -1,4 +1,4 @@
-import { graphql } from "@octokit/graphql";
+import {graphql} from '@octokit/graphql';
 
 export interface RepoStats {
   issues: number;
@@ -34,7 +34,7 @@ export function createGitHubService(token: string) {
           }
         }
         `,
-        { owner, repo },
+        {owner, repo},
       );
 
       return {
