@@ -52,9 +52,13 @@ cli
   .option('--output-dir <path>', '결과 파일을 저장할 디렉터리', {
     default: 'output',
   })
-  .option('--cache', '기존 캐시를 사용하여 데이터를 수집합니다 (캐시 무시: --no-cache)', {
-    default: true,
-  })
+  .option(
+    '--cache',
+    '기존 캐시를 사용하여 데이터를 수집합니다 (캐시 무시: --no-cache)',
+    {
+      default: true,
+    },
+  )
   .option('--since <since>', '캐시 이후 증분 수집 기준 시점 ISO8601')
   .option('--sort-by <field>', '정렬 기준 (score, id)', {
     default: 'score',
