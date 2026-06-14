@@ -116,6 +116,29 @@ const PAGE_SIZE = 100;
 export const normalizeWhitespace = (text: string): string =>
   text.replace(/\s+/g, '').toLowerCase();
 
+const HTML_COMMENT_PATTERN = /<!--[\s\S]*?-->/g;
+const CLOSING_ISSUE_PATTERN =
+  /\b(?:close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved)\s+(?:#(\d+)|https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/issues\/(\d+))\b/gi;
+
+/**
+ * PR 본문에서 실제 GitHub closing keyword가 붙은 이슈 번호만 추출합니다.
+ * PR 템플릿의 HTML 주석 예시 번호나 단순 참고용 #번호는 제외합니다.
+ */
+export const parseClosingIssueNumbers = (body: string): number[] => {
+  const issueNumbers = new Set<number>();
+  const bodyWithoutComments = body.replace(HTML_COMMENT_PATTERN, '');
+
+  for (const match of bodyWithoutComments.matchAll(CLOSING_ISSUE_PATTERN)) {
+    const issueNumber = Number(match[1] ?? match[2]);
+
+    if (Number.isInteger(issueNumber)) {
+      issueNumbers.add(issueNumber);
+    }
+  }
+
+  return [...issueNumbers];
+};
+
 /**
  * GitHub 라벨명을 내부 기여 카테고리로 정규화합니다.
  * @param label 정규화할 GitHub 라벨명
@@ -632,10 +655,8 @@ export const createGitHubService = (token: string, pageSize = PAGE_SIZE) => {
       const connection = response.repository.pullRequests;
 
       for (const pr of connection.nodes) {
-        const body = pr.body ?? '';
-        const matches = body.matchAll(/#(\d+)/g);
-        for (const match of matches) {
-          const issueNum = parseInt(match[1]!, 10);
+        const issueNumbers = parseClosingIssueNumbers(pr.body ?? '');
+        for (const issueNum of issueNumbers) {
           if (!issueToOpenPr.has(issueNum)) {
             issueToOpenPr.set(issueNum, {number: pr.number, url: pr.url});
           }
