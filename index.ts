@@ -20,6 +20,11 @@ import {
 } from './src/sort';
 import {type FullGitHubService} from './src/types';
 import {setVerbose, logVerbose} from './src/logger';
+import {
+  findDuplicateParsedRepos,
+  parseRepoPath,
+  type ParsedRepo,
+} from './src/repo-input';
 
 // --keywords 옵션 설명 문자열과 실제 폴백 값이 항상 일치하도록 단일 위치에서 정의합니다.
 const DEFAULT_KEYWORDS = [
@@ -31,24 +36,6 @@ const DEFAULT_KEYWORDS = [
 
 const cli = cac('reposcore-ts');
 cli.version(pkg.version);
-
-/**
- * 저장소 경로 문자열을 소유자와 저장소 이름으로 분리합니다.
- * @param repoPath owner/repo 형식의 저장소 경로
- * @returns 저장소 소유자와 이름 정보, 형식이 올바르지 않으면 null
- */
-function parseRepoPath(repoPath: string) {
-  const parts = repoPath.split('/');
-
-  if (parts.length !== 2 || !parts[0] || !parts[1]) {
-    return null;
-  }
-
-  return {
-    owner: parts[0],
-    repoName: parts[1],
-  };
-}
 
 cli
   .command('[...repos]', '대상 저장소 목록 (예: owner/repo1 owner/repo2)')
@@ -161,11 +148,7 @@ cli
         );
       }
 
-      const parsedRepos: {
-        repoPath: string;
-        owner: string;
-        repoName: string;
-      }[] = [];
+      const parsedRepos: ParsedRepo[] = [];
 
       // CLI 실행에 필요한 옵션과 입력값을 검증합니다.
       if (!token) {
@@ -228,6 +211,13 @@ cli
           owner: parsedRepo.owner,
           repoName: parsedRepo.repoName,
         });
+      }
+
+      const duplicateRepos = findDuplicateParsedRepos(parsedRepos);
+      for (const repo of duplicateRepos) {
+        errors.push(
+          `오류: 중복 저장소 '${repo.repoPath}'가 입력되었습니다. 같은 저장소는 한 번만 입력하세요.`,
+        );
       }
 
       // 검증 중 발견된 오류를 출력하고 실행을 중단합니다.
