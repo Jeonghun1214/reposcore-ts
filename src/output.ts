@@ -444,8 +444,12 @@ const getDeadlineStatus = (
  * 선점 현황 데이터를 표준 출력(stdout)에 사람이 읽기 좋은 형태로 출력합니다.
  *
  * @param claims 저장소별 선점 및 미선점 이슈 정보
+ * @param mode 출력 모드 ('issue' 또는 'user')
  */
-export const printClaims = (claims: RepoClaims): void => {
+export const printClaims = (
+  claims: RepoClaims,
+  mode: 'issue' | 'user' = 'issue',
+): void => {
   console.log(`\n[${claims.repoPath}]`);
 
   // 1. 원본 배열을 변경하지 않도록 복사([...]) 후 issueNumber 오름차순 정렬
@@ -457,26 +461,56 @@ export const printClaims = (claims: RepoClaims): void => {
     (a, b) => a.issueNumber - b.issueNumber,
   );
 
-  console.log('선점된 이슈');
+  console.log(mode === 'user' ? '선점된 이슈 (사용자별)' : '선점된 이슈');
   if (sortedClaimed.length === 0) {
     console.log('  (없음)');
   } else {
-    // 2. 기존 claims.claimed 대신 정렬된 sortedClaimed 배열을 순회하도록 변경
-    for (const c of sortedClaimed) {
-      console.log(`- #${c.issueNumber} ${c.title}`);
-      console.log(`  URL: ${c.url}`);
-      if (c.claimedAt) {
-        const {type, hours} = getTaskDeadline(c.labels);
-        const status = getDeadlineStatus(
-          c.claimedAt,
-          hours,
-          c.linkedPrNumber,
-          c.linkedPrUrl,
-        );
-        console.log(`  선점자: ${c.claimedBy}`);
-        console.log(`  상태: ${type} [${hours}시간 기한] | ${status}`);
-      } else {
-        console.log(`  선점자: ${c.claimedBy}`);
+    if (mode === 'user') {
+      const byUser = new Map<string, typeof sortedClaimed>();
+      for (const c of sortedClaimed) {
+        const user = c.claimedBy || 'unknown';
+        if (!byUser.has(user)) {
+          byUser.set(user, []);
+        }
+        byUser.get(user)!.push(c);
+      }
+
+      const sortedUsers = Array.from(byUser.keys()).sort();
+
+      for (const user of sortedUsers) {
+        console.log(`\n[${user}]`);
+        for (const c of byUser.get(user)!) {
+          console.log(`- #${c.issueNumber} ${c.title}`);
+          console.log(`  URL: ${c.url}`);
+          if (c.claimedAt) {
+            const {type, hours} = getTaskDeadline(c.labels);
+            const status = getDeadlineStatus(
+              c.claimedAt,
+              hours,
+              c.linkedPrNumber,
+              c.linkedPrUrl,
+            );
+            console.log(`  상태: ${type} [${hours}시간 기한] | ${status}`);
+          }
+        }
+      }
+    } else {
+      for (const c of sortedClaimed) {
+        console.log(`- #${c.issueNumber} ${c.title}`);
+        console.log(`  URL: ${c.url}`);
+        if (c.claimedAt) {
+          const {type, hours} = getTaskDeadline(c.labels);
+          const status = getDeadlineStatus(
+            c.claimedAt,
+            hours,
+            c.linkedPrNumber,
+            c.linkedPrUrl,
+          );
+          console.log(`  선점자: ${c.claimedBy}`);
+          console.log(`  상태: ${type} [${hours}시간 기한] | ${status}`);
+        } else {
+          console.log(`  선점자: ${c.claimedBy}`);
+        }
       }
     }
   }
