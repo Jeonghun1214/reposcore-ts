@@ -21,6 +21,14 @@ import {
 import {type FullGitHubService} from './src/types';
 import {setVerbose, logVerbose} from './src/logger';
 
+// --keywords 옵션 설명 문자열과 실제 폴백 값이 항상 일치하도록 단일 위치에서 정의합니다.
+const DEFAULT_KEYWORDS = [
+  '제가 하겠습니다',
+  '진행하겠습니다',
+  '할게요',
+  "I'll take this",
+];
+
 const cli = cac('reposcore-ts');
 cli.version(pkg.version);
 
@@ -53,13 +61,7 @@ cli
   .option('--output-dir <path>', '결과 파일을 저장할 디렉터리', {
     default: 'output',
   })
-  .option(
-    '--cache',
-    '기존 캐시를 사용하여 데이터를 수집합니다 (캐시 무시: --no-cache)',
-    {
-      default: true,
-    },
-  )
+  .option('--no-cache', '캐시를 무시하고 GitHub API를 새로 호출합니다')
   .option('--since <since>', '캐시 이후 증분 수집 기준 시점 ISO8601')
   .option('--sort-by <field>', '정렬 기준 (score, id)', {
     default: 'score',
@@ -70,7 +72,7 @@ cli
   .option('--claims [issue|user]', '최근 이슈 선점 현황 조회 (기본 issue)')
   .option(
     '--keywords [items]',
-    "이슈 선점 키워드 목록(쉼표 구분, 기본값: 제가 하겠습니다,진행하겠습니다,할게요,I'll take this)",
+    `이슈 선점 키워드 목록(쉼표 구분, 기본값: ${DEFAULT_KEYWORDS.join(',')})`,
     {
       type: [String],
     },
@@ -128,29 +130,24 @@ cli
           ? options.claims.toLowerCase()
           : 'issue';
 
-      // 이슈 선점 여부를 판단하기 위한 기본 키워드 목록입니다.
-      const DEFAULT_KEYWORDS = [
-        '제가 하겠습니다',
-        '진행하겠습니다',
-        '할게요',
-        "I'll take this",
-      ];
+      // cac는 값 없이 --keywords만 입력하면 ['true']를 넘깁니다.
+      // undefined(옵션 미지정)와 ['true'](값 없는 --keywords) 모두 기본 키워드로 폴백합니다.
+      const isDefaultFallback =
+        options.keywords === undefined ||
+        (Array.isArray(options.keywords) &&
+          options.keywords.length === 1 &&
+          options.keywords[0] === 'true');
 
-      const rawKeywords =
-        Array.isArray(options.keywords) &&
-        options.keywords.length === 1 &&
-        options.keywords[0] === 'undefined'
-          ? DEFAULT_KEYWORDS.join(',')
-          : Array.isArray(options.keywords)
-            ? options.keywords.join(',')
-            : typeof options.keywords === 'string'
-              ? options.keywords
-              : DEFAULT_KEYWORDS.join(',');
+      const rawKeywords = isDefaultFallback
+        ? DEFAULT_KEYWORDS.join(',')
+        : Array.isArray(options.keywords)
+          ? options.keywords.join(',')
+          : String(options.keywords);
 
       const claimKeywords = rawKeywords
         .split(',')
         .map(k => k.trim())
-        .filter(keyword => keyword && keyword !== '0');
+        .filter(Boolean);
 
       if (isClaimsMode && claimKeywords.length === 0) {
         errors.push(
@@ -211,13 +208,6 @@ cli
         );
       }
 
-      // [수정 포인트] --since 입력값이 존재할 때 ISO8601 날짜 규격 포맷 유효성 검증 예외 필터링 추가
-      if (since && Number.isNaN(Date.parse(since))) {
-        errors.push(
-          '오류: --since 값은 ISO8601 형식의 유효한 날짜 문자열이어야 합니다.',
-        );
-      }
-
       if (repos.length === 0) {
         errors.push(
           '오류: 최소 하나 이상의 저장소(owner/repo)를 입력해야 합니다.',
@@ -268,8 +258,13 @@ cli
         process.exit(1);
       }
 
+      // ── [개선] --claims 모드 병렬 처리 ──────────────────────────────────
+
       // --claims 옵션이 있으면 점수 계산 대신 이슈 선점 현황만 조회합니다.
       if (isClaimsMode) {
+        // 조회 실패 여부를 추적하는 플래그입니다.
+        // 루프 도중에 즉시 종료하지 않고 모든 저장소를 끝까지 처리한 뒤,
+        // 루프가 완전히 끝난 후 이 플래그를 확인하여 종료 코드를 결정합니다.
         let hasClaimFailure = false;
 
         for (const {repoPath, owner, repoName} of parsedRepos) {
@@ -300,7 +295,7 @@ cli
       logVerbose(`형식: ${formats.join(', ')}`);
       logVerbose(`저장소: ${repos.join(', ')}`);
 
-      // 일반 기여도 점수 산정 모드 병렬 처리 (Promise.allSettled)
+      // ── [개선] 일반 기여도 점수 산정 모드 병렬 처리 (Promise.allSettled) ──────
       const tasks = parsedRepos.map(async ({repoPath, owner, repoName}) => {
         const detailed = await githubService.getDetailedRepoData(
           owner,
@@ -339,6 +334,7 @@ cli
       const repoSummaries: RepoSummary[] = [];
       let hasFailure = false;
 
+      // 입력된 순서를 완벽하게 보장하며 순회 및 안전 분기 결합
       results.forEach((result, i) => {
         const {repoPath} = parsedRepos[i]!;
 
@@ -362,16 +358,19 @@ cli
         }
       });
 
+      // 단 하나의 저장소라도 통신에 실패했다면 수집 작업 안내 후 종료 코드로 즉시 반영
       if (hasFailure) {
         process.exit(1);
       }
 
+      // 모든 저장소 데이터를 합산하여 최종 사용자 점수를 계산합니다. (입력 순서가 보장된 리스트 활용)
       const userScores = sortUserScores(
         ScoreCalculator.calculateUserScores(repoDataList),
         sortBy as SupportedSortBy,
         sortOrder as SupportedSortOrder,
       );
 
+      // 합산된 사용자 점수와 저장소 요약 정보를 파일로 출력합니다.
       const written = await writeOutputFiles(
         formats as SupportedFormat[],
         {
