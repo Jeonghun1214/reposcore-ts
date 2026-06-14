@@ -61,7 +61,7 @@ cli
   .option('--sort-order <order>', '정렬 방식 (asc, desc)', {
     default: 'desc',
   })
-  .option('--claims', '최근 이슈 선점 현황을 조회합니다')
+  .option('--claims [issue|user]', '최근 이슈 선점 현황 조회 (기본 issue)')
   .option(
     '--keywords [items]',
     "이슈 선점 키워드 목록(쉼표 구분, 기본값: 제가 하겠습니다,진행하겠습니다,할게요,I'll take this)",
@@ -84,7 +84,7 @@ cli
         since?: string;
         sortBy: string;
         sortOrder: string;
-        claims?: boolean;
+        claims?: boolean | string;
         keywords?: string | string[];
         pageSize?: number | string;
         verbose?: boolean;
@@ -116,7 +116,12 @@ cli
 
       const errors: string[] = [];
 
-      const isClaimsMode = !!options.claims;
+      const isClaimsMode = options.claims !== undefined;
+      const claimsMode =
+        typeof options.claims === 'string'
+          ? options.claims.toLowerCase()
+          : 'issue';
+
       // 이슈 선점 여부를 판단하기 위한 기본 키워드 목록입니다.
       const DEFAULT_KEYWORDS = [
         '제가 하겠습니다',
@@ -144,6 +149,12 @@ cli
       if (isClaimsMode && claimKeywords.length === 0) {
         errors.push(
           '오류: --keywords에는 하나 이상의 선점 키워드를 입력해야 합니다.',
+        );
+      }
+
+      if (isClaimsMode && claimsMode !== 'issue' && claimsMode !== 'user') {
+        errors.push(
+          `오류: 지원하지 않는 --claims 모드 '${options.claims}'입니다. issue 또는 user를 입력하세요.`,
         );
       }
 
@@ -262,7 +273,7 @@ cli
               repoPath,
               useCache,
             );
-            printClaims(claims);
+            printClaims(claims, claimsMode as 'issue' | 'user');
           } catch (err) {
             hasClaimFailure = true;
             const msg = err instanceof Error ? err.message : String(err);

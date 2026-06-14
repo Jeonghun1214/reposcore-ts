@@ -163,4 +163,65 @@ describe('선점 기한 판정', () => {
     expect(joined).toContain('상태: 문서 [24시간 기한]');
     expect(joined).toContain('상태: 코드 [48시간 기한]');
   });
+
+  test('사용자별로 묶어 선점 현황을 출력해야 한다 (user 모드)', () => {
+    const claims: RepoClaims = {
+      repoPath: 'oss2026hnu/reposcore-ts',
+      claimed: [
+        {
+          issueNumber: 101,
+          title: 'Issue 101',
+          url: 'https://example.com/issues/101',
+          labels: {nodes: []},
+          claimedBy: 'alpha',
+          matchedKeyword: '/claim',
+          claimedAt: '2026-06-12T00:00:00.000Z',
+          linkedPrNumber: null,
+          linkedPrUrl: null,
+        },
+        {
+          issueNumber: 103,
+          title: 'Issue 103',
+          url: 'https://example.com/issues/103',
+          labels: {nodes: []},
+          claimedBy: 'alpha',
+          matchedKeyword: '/claim',
+          claimedAt: '2026-06-12T00:00:00.000Z',
+          linkedPrNumber: null,
+          linkedPrUrl: null,
+        },
+        {
+          issueNumber: 102,
+          title: 'Issue 102',
+          url: 'https://example.com/issues/102',
+          labels: {nodes: []},
+          claimedBy: 'beta',
+          matchedKeyword: '/claim',
+          claimedAt: null,
+          linkedPrNumber: null,
+          linkedPrUrl: null,
+        },
+      ],
+      unclaimed: [],
+    };
+
+    const logs: string[] = [];
+    const originalLog = console.log;
+    console.log = (...args: unknown[]) => {
+      logs.push(args.map(value => String(value)).join(' '));
+    };
+
+    try {
+      printClaims(claims, 'user');
+    } finally {
+      console.log = originalLog;
+    }
+
+    const joined = logs.join('\n');
+    expect(joined).toContain('[alpha]');
+    expect(joined).toContain('- #101 Issue 101');
+    expect(joined).toContain('- #103 Issue 103');
+    expect(joined).toContain('[beta]');
+    expect(joined).toContain('- #102 Issue 102');
+  });
 });

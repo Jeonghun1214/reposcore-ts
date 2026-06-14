@@ -82,7 +82,7 @@ Options:
   --since <since>        캐시 이후 증분 수집 기준 시점 ISO8601 
   --sort-by <field>      정렬 기준 (score, id) (default: score)
   --sort-order <order>   정렬 방식 (asc, desc) (default: desc)
-  --claims               최근 이슈 선점 현황을 조회합니다 
+  --claims [issue|user]  최근 이슈 선점 현황 조회 (기본 issue) 
   --keywords [items]     이슈 선점 키워드 목록(쉼표 구분, 기본값: 제가 하겠습니다,진행하겠습니다,할게요,I'll take this) 
   --page-size <number>   한 번에 가져올 항목 수 (1~100) (default: $PAGE_SIZE)
   --verbose              진단 및 진행 로그를 출력합니다 
