@@ -593,7 +593,9 @@ export const createGitHubService = (token: string, pageSize = PAGE_SIZE) => {
         issues,
       };
 
-      await saveCache(owner, repo, data, analysisStartedAt);
+      if (useCache) {
+        await saveCache(owner, repo, data, analysisStartedAt);
+      }
 
       return data;
     }
@@ -610,7 +612,9 @@ export const createGitHubService = (token: string, pageSize = PAGE_SIZE) => {
       issues: mergeByNumber(cached.data.issues, updatedIssues),
     };
 
-    await saveCache(owner, repo, data, analysisStartedAt);
+    if (useCache) {
+      await saveCache(owner, repo, data, analysisStartedAt);
+    }
 
     return data;
   };
@@ -855,13 +859,15 @@ export const createGitHubService = (token: string, pageSize = PAGE_SIZE) => {
       openIssues = mergeByNumber(filteredCached, openUpdated);
     }
 
-    await saveCache<ClaimsData>(
-      owner,
-      repo,
-      {issues: openIssues},
-      analysisStartedAt,
-      'claims-cache',
-    );
+    if (useCache) {
+      await saveCache<ClaimsData>(
+        owner,
+        repo,
+        {issues: openIssues},
+        analysisStartedAt,
+        'claims-cache',
+      );
+    }
 
     const claimed: ClaimInfo[] = [];
     const unclaimed: ClaimInfo[] = [];
