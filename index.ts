@@ -52,10 +52,9 @@ cli
   .option('--output-dir <path>', '결과 파일을 저장할 디렉터리', {
     default: 'output',
   })
-  .option(
-    '--no-cache',
-    '설정 시 기존 캐시를 무시하고 전체 데이터를 새로 수집합니다',
-  )
+  .option('--cache', '기존 캐시를 사용하여 데이터를 수집합니다 (캐시 무시: --no-cache)', {
+    default: true,
+  })
   .option('--since <since>', '캐시 이후 증분 수집 기준 시점 ISO8601')
   .option('--sort-by <field>', '정렬 기준 (score, id)', {
     default: 'score',
@@ -374,13 +373,5 @@ cli
     },
   );
 
-cli.help(sections => {
-  const optionsSection = sections.find(s => s.title === 'Options');
-  if (optionsSection && optionsSection.body) {
-    optionsSection.body = optionsSection.body.replace(
-      /(--no-cache.*?)\s*\(default:\s*true\)/,
-      '$1',
-    );
-  }
-});
+cli.help();
 cli.parse();
