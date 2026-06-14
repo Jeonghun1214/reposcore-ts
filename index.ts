@@ -1,7 +1,7 @@
 import {cac} from 'cac';
 import pkg from './package.json' with {type: 'json'};
 
-import {createGitHubService} from './src/github-service';
+import {createGitHubService, formatGitHubApiError} from './src/github-service';
 import {ScoreCalculator, type RepoData} from './src/score-calculator';
 import {
   summarizeRepo,
@@ -236,9 +236,14 @@ cli
       ) as FullGitHubService;
 
       // 실제 데이터 수집 전에 모든 저장소가 GitHub에 존재하는지 한 번에 검증합니다.
-      const missingRepos =
-        await githubService.validateRepositoriesExist(parsedRepos);
-
+      let missingRepos: string[];
+      try {
+        missingRepos =
+          await githubService.validateRepositoriesExist(parsedRepos);
+      } catch (error) {
+        console.error(formatGitHubApiError(error));
+        process.exit(1);
+      }
       if (missingRepos.length > 0) {
         for (const repoPath of missingRepos) {
           console.error(
