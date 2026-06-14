@@ -1,6 +1,35 @@
 import {describe, expect, test, afterEach} from 'bun:test';
 
-import {normalizeWhitespace, categorizeLabels} from '../src/github-service';
+import {
+  normalizeWhitespace,
+  categorizeLabels,
+  parseClosingIssueNumbers,
+} from '../src/github-service';
+
+describe('open PR linked issue parsing', () => {
+  test('PR 템플릿 HTML 주석의 예시 이슈 번호는 연결 이슈로 처리하지 않는다', () => {
+    const body = `### ISSUE_ID
+<!-- 관련된 이슈 ID를 입력해주세요 (예: #123) -->
+Closes #319`;
+
+    expect(parseClosingIssueNumbers(body)).toEqual([319]);
+  });
+
+  test('closing keyword가 없는 단순 참고 번호는 연결 이슈로 처리하지 않는다', () => {
+    const body = `참고: #123
+관련 논의: #300`;
+
+    expect(parseClosingIssueNumbers(body)).toEqual([]);
+  });
+
+  test('GitHub closing keyword가 붙은 이슈 번호만 중복 없이 추출한다', () => {
+    const body = `Fixes #10
+Resolves #20
+Closed #10`;
+
+    expect(parseClosingIssueNumbers(body)).toEqual([10, 20]);
+  });
+});
 
 describe('claims keyword whitespace normalization', () => {
   test('선점 키워드의 공백 차이를 제거해 같은 문자열로 정규화한다', () => {
