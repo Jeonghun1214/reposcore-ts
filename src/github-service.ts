@@ -751,7 +751,7 @@ export const createGitHubService = (token: string, pageSize = PAGE_SIZE) => {
           `,
           {
             searchQuery: `repo:${owner}/${repo} is:issue updated:>=${since}`,
-            pageSize: PAGE_SIZE,
+            pageSize,
             cursor,
           },
         );
