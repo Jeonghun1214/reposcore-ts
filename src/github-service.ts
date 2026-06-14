@@ -113,6 +113,28 @@ interface GetDetailedRepoDataOptions {
 
 const PAGE_SIZE = 100;
 
+/**
+ * GitHub API 호출 중 발생한 오류를 사용자 친화적인 메시지로 변환합니다.
+ * 인증 실패(401)와 요청 한도 초과(403/429)는 구체적인 안내로,
+ * 그 외 오류는 raw 스택 트레이스 대신 정리된 메시지로 변환합니다.
+ * @param error 발생한 오류 객체
+ * @returns 사용자에게 출력할 오류 메시지
+ */
+export const formatGitHubApiError = (error: unknown): string => {
+  const status = (error as {status?: number} | null)?.status;
+
+  if (status === 401) {
+    return '오류: GitHub API 인증에 실패했습니다. GITHUB_TOKEN 또는 --token 값을 확인하세요. (Status: 401)';
+  }
+
+  if (status === 403 || status === 429) {
+    return `오류: GitHub API 요청 한도를 초과했습니다. 잠시 후 다시 시도하세요. (Status: ${status})`;
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  return `오류: 저장소 검증 중 GitHub API 오류가 발생했습니다. (${message})`;
+};
+
 export const normalizeWhitespace = (text: string): string =>
   text.replace(/\s+/g, '').toLowerCase();
 

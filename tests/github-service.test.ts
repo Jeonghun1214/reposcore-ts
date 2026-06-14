@@ -4,6 +4,7 @@ import {
   normalizeWhitespace,
   categorizeLabels,
   parseClosingIssueNumbers,
+  formatGitHubApiError,
 } from '../src/github-service';
 
 describe('open PR linked issue parsing', () => {
@@ -330,5 +331,30 @@ describe('claims doc 라벨 24h 기한 필터', () => {
     expect(issueCategory).toBe('doc');
     expect(CLAIM_WINDOW_MS).toBe(24 * 60 * 60 * 1000);
     expect(matchedClaim).toBeNull();
+  });
+});
+
+describe('GitHub API 오류 메시지 변환', () => {
+  test('401 오류는 인증 실패 메시지로 변환한다', () => {
+    const error = Object.assign(new Error('Bad credentials'), {status: 401});
+    const message = formatGitHubApiError(error);
+    expect(message).toContain('인증에 실패');
+    expect(message).toContain('401');
+  });
+
+  test('403/429 오류는 요청 한도 메시지로 변환한다', () => {
+    expect(
+      formatGitHubApiError(Object.assign(new Error('x'), {status: 403})),
+    ).toContain('요청 한도');
+    expect(
+      formatGitHubApiError(Object.assign(new Error('x'), {status: 429})),
+    ).toContain('요청 한도');
+  });
+
+  test('raw HttpError 스택 트레이스를 그대로 노출하지 않는다', () => {
+    const error = Object.assign(new Error('Bad credentials'), {status: 401});
+    const message = formatGitHubApiError(error);
+    expect(message).not.toContain('HttpError');
+    expect(message.startsWith('오류:')).toBe(true);
   });
 });
