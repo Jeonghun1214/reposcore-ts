@@ -180,6 +180,51 @@ describe('claims 48h 기한 필터', () => {
 
     expect(matchedClaim).toBeNull();
   });
+
+  /**
+   * 선점 댓글 이후에 10개 이상의 추가 댓글이 작성된 경우라도
+   * 충분한 수량의 댓글을 불러온 상황에서는 선점 댓글이 올바르게 검출되는지 테스트합니다.
+   */
+  test('선점 댓글 이후 10개 이상의 추가 댓글이 달려있어도 정상적으로 선점을 인식해야 한다', () => {
+    const fakeNow = new Date('2026-06-13T12:00:00.000Z').getTime();
+    Date.now = () => fakeNow;
+
+    // 이후에 달린 12개의 댓글 (1시간 전 작성됨)
+    const extraComments = Array.from({length: 12}, (_, i) => ({
+      body: `추가 질문이나 피드백 ${i}`,
+      author: {login: `user${i}`},
+      createdAt: '2026-06-13T11:00:00.000Z',
+    }));
+
+    const rawComments = [
+      {
+        body: '제가 하겠습니다',
+        author: {login: 'carol'},
+        createdAt: '2026-06-13T00:00:00.000Z', // 12시간 전 → 유효 (선점 댓글)
+      },
+      ...extraComments,
+    ];
+
+    const keywords = ['제가 하겠습니다'];
+    const CLAIM_WINDOW_MS = 48 * 60 * 60 * 1000;
+    const now = Date.now();
+    const comments = [...rawComments].reverse();
+
+    let matchedClaim: {claimer: string; keyword: string} | null = null;
+
+    for (const comment of comments) {
+      if (now - new Date(comment.createdAt).getTime() > CLAIM_WINDOW_MS) continue;
+
+      const normalizedBody = normalizeWhitespace(comment.body);
+      const foundKeyword = keywords.find(k => normalizedBody.includes(normalizeWhitespace(k)));
+      if (foundKeyword) {
+        matchedClaim = {claimer: comment.author?.login ?? 'unknown', keyword: foundKeyword};
+        break;
+      }
+    }
+
+    expect(matchedClaim?.claimer).toBe('carol');
+  });
 });
 
 describe('claims doc 라벨 24h 기한 필터', () => {

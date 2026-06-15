@@ -112,6 +112,7 @@ interface GetDetailedRepoDataOptions {
 }
 
 const PAGE_SIZE = 100;
+const COMMENTS_FETCH_SIZE = 50; // 선점 파악을 위해 넉넉한 개수의 최근 댓글을 가져옵니다.
 
 /**
  * GitHub API 호출 중 발생한 오류를 사용자 친화적인 메시지로 변환합니다.
@@ -722,7 +723,7 @@ export const createGitHubService = (token: string, pageSize = PAGE_SIZE) => {
       const response: ClaimsPageResponse =
         await githubGraphQL<ClaimsPageResponse>(
           `
-          query($owner: String!, $repo: String!, $pageSize: Int!, $cursor: String) {
+          query($owner: String!, $repo: String!, $pageSize: Int!, $cursor: String, $commentsSize: Int!) {
             repository(owner: $owner, name: $repo) {
               issues(first: $pageSize, after: $cursor, states: OPEN, orderBy: {field: CREATED_AT, direction: DESC}) {
                 nodes {
@@ -730,7 +731,7 @@ export const createGitHubService = (token: string, pageSize = PAGE_SIZE) => {
                   title
                   url
                   labels(first: 20) { nodes { name } }
-                  comments(last: 10) {
+                  comments(last: $commentsSize) {
                     nodes {
                       body
                       author { login }
@@ -746,7 +747,13 @@ export const createGitHubService = (token: string, pageSize = PAGE_SIZE) => {
             }
           }
           `,
-          {owner, repo, pageSize, cursor},
+          {
+            owner,
+            repo,
+            pageSize,
+            cursor,
+            commentsSize: COMMENTS_FETCH_SIZE,
+          },
         );
 
       const connection = response.repository.issues;
@@ -779,7 +786,7 @@ export const createGitHubService = (token: string, pageSize = PAGE_SIZE) => {
       const response: ClaimsSearchResponse =
         await githubGraphQL<ClaimsSearchResponse>(
           `
-          query($searchQuery: String!, $pageSize: Int!, $cursor: String) {
+          query($searchQuery: String!, $pageSize: Int!, $cursor: String, $commentsSize: Int!) {
             search(query: $searchQuery, type: ISSUE, first: $pageSize, after: $cursor) {
               nodes {
                 ... on Issue {
@@ -788,7 +795,7 @@ export const createGitHubService = (token: string, pageSize = PAGE_SIZE) => {
                   url
                   state
                   labels(first: 20) { nodes { name } }
-                  comments(last: 10) {
+                  comments(last: $commentsSize) {
                     nodes {
                       body
                       author { login }
@@ -808,6 +815,7 @@ export const createGitHubService = (token: string, pageSize = PAGE_SIZE) => {
             searchQuery: `repo:${owner}/${repo} is:issue updated:>=${since}`,
             pageSize,
             cursor,
+            commentsSize: COMMENTS_FETCH_SIZE,
           },
         );
 
