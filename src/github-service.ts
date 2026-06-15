@@ -113,13 +113,37 @@ interface GetDetailedRepoDataOptions {
 
 const PAGE_SIZE = 100;
 
+/**
+ * GitHub API 호출 중 발생한 오류를 사용자 친화적인 메시지로 변환합니다.
+ * 인증 실패(401)와 요청 한도 초과(403/429)는 구체적인 안내로,
+ * 그 외 오류는 raw 스택 트레이스 대신 정리된 메시지로 변환합니다.
+ * @param error 발생한 오류 객체
+ * @returns 사용자에게 출력할 오류 메시지
+ */
+export const formatGitHubApiError = (error: unknown): string => {
+  const status = (error as {status?: number} | null)?.status;
+
+  if (status === 401) {
+    return '오류: GitHub API 인증에 실패했습니다. GITHUB_TOKEN 또는 --token 값을 확인하세요. (Status: 401)';
+  }
+
+  if (status === 403 || status === 429) {
+    return `오류: GitHub API 요청 한도를 초과했습니다. 잠시 후 다시 시도하세요. (Status: ${status})`;
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  return `오류: 저장소 검증 중 GitHub API 오류가 발생했습니다. (${message})`;
+};
+
 export const normalizeWhitespace = (text: string): string =>
   text.replace(/\s+/g, '').toLowerCase();
 
-const HTML_COMMENT_PATTERN = /<!--[\s\S]*?-->/g;
-const CLOSING_ISSUE_PATTERN =
-  /\b(?:close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved)\s+(?:#(\d+)|https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/issues\/(\d+))\b/gi;
-
+// [긴급 조치] 복사 인코딩 오류 및 개행 문자 깨짐을 우회하기 위해 정규식을 안전한 RegExp 생성자 문자열 구조로 전면 전향
+const HTML_COMMENT_PATTERN = new RegExp('<!--[\\s\\S]*?-->', 'g');
+const CLOSING_ISSUE_PATTERN = new RegExp(
+  '\\b(?:close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved)\\s+(?:#(\\d+)|https://github\\.com/[^/\\s]+/[^/\\s]+/issues/(\\d+))\\b',
+  'gi',
+);
 /**
  * PR 본문에서 실제 GitHub closing keyword가 붙은 이슈 번호만 추출합니다.
  * PR 템플릿의 HTML 주석 예시 번호나 단순 참고용 #번호는 제외합니다.
@@ -582,10 +606,15 @@ export const createGitHubService = (token: string, pageSize = PAGE_SIZE) => {
     const analysisStartedAt = new Date().toISOString();
     const cached = await loadCache<DetailedRepoData>(owner, repo, !useCache);
 
+    // [버그 수정 완료 블록] 캐시가 없는 상태이거나 --no-cache 일 때 options.since를 검사하여 데이터 필터링 적용
     if (!cached) {
       const [issues, prs] = await Promise.all([
-        getAllValidIssues(owner, repo),
-        getAllMergedPullRequests(owner, repo),
+        options?.since
+          ? getUpdatedValidIssues(owner, repo, options.since)
+          : getAllValidIssues(owner, repo),
+        options?.since
+          ? getUpdatedMergedPullRequests(owner, repo, options.since)
+          : getAllMergedPullRequests(owner, repo),
       ]);
 
       const data: DetailedRepoData = {
@@ -600,6 +629,7 @@ export const createGitHubService = (token: string, pageSize = PAGE_SIZE) => {
       return data;
     }
 
+    // 캐시가 존재할 때 기존 점진적 수집 흐름
     const since = options?.since ?? cached.lastAnalyzedAt;
 
     const [updatedIssues, updatedPrs] = await Promise.all([
@@ -960,13 +990,11 @@ export const createGitHubService = (token: string, pageSize = PAGE_SIZE) => {
     try {
       data = await githubGraphQL<ExistenceData>(query, variables);
     } catch (error: unknown) {
-      // NOT_FOUND 등 errors가 있어도 부분 데이터는 error.data에 담겨 옴
       const partial = (error as {data?: ExistenceData}).data;
       if (!partial) throw error;
       data = partial;
     }
 
-    // 응답이 null인 저장소 = 존재하지 않거나 접근 불가
     return repos.filter((_, i) => !data[`r${i}`]).map(repo => repo.repoPath);
   };
 
